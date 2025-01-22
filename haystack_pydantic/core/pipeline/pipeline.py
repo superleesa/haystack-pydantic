@@ -1,11 +1,11 @@
 import inspect
 from contextlib import ExitStack
-from typing import Any, Callable, TYPE_CHECKING, Protocol
+from typing import Any, Callable
 
 from haystack import Pipeline
 from pydantic import BaseModel
 
-from haystack_pydantic.core.component.component import LenientComponent
+from haystack_pydantic.core.component.component import PydanticComponent
 
 
 def create_run_method(original_run_method: Callable[..., BaseModel]) -> Callable:
@@ -19,20 +19,14 @@ def create_run_method(original_run_method: Callable[..., BaseModel]) -> Callable
     return run_and_return_typeddict
 
 
-class AddComponentSig(Protocol):
-    def __call__(self, name: str, instance: LenientComponent) -> None:
-        ...
+class PydanticWrappedPipeline:
+    def __init__(self, *args: Any, **kwargs: Any):
+        self.base_pipeline = Pipeline(*args, **kwargs)
 
-
-class PydanticWrappedPipeline(Pipeline):
-    if TYPE_CHECKING:
-        add_component: AddComponentSig  # type: ignore
-    
-    
     def _convert_to_model(
         self, component_name: str, data: dict[str, Any]
     ) -> BaseModel | dict:
-        component = self.graph.nodes[component_name]["instance"]
+        component = self.base_pipeline.graph.nodes[component_name]["instance"]
         model = inspect.signature(component.run).return_annotation
         if not issubclass(model, BaseModel):
             return data
@@ -45,14 +39,23 @@ class PydanticWrappedPipeline(Pipeline):
             component_name,
             original_run_method,
         ) in component_name_to_original_run_method.items():
-            self.graph.nodes[component_name]["instance"].run = original_run_method
+            self.base_pipeline.graph.nodes[component_name][
+                "instance"
+            ].run = original_run_method
+
+    def connect(self, sender: str, receiver: str) -> None:
+        self.base_pipeline.connect(sender=sender, receiver=receiver)
+
+    def add_component(self, name: str, instance: PydanticComponent) -> None:
+        # (technically instance must have run method with dict output type, but the output type won't be used anyways so we wwe will ignore the type error)
+        self.base_pipeline.add_component(name=name, instance=instance)  # type: ignore
 
     def run(
         self, data: dict[str, Any], include_outputs_from: set[str] | None = None
     ) -> dict[str, BaseModel | dict]:
         # patch run methods of all components to return dict instead of Pydantic models (because Pipeline internally uses dict)
         component_name_to_modeled_run_method: dict[str, Callable] = {}
-        for node_name, node_data in self.graph.nodes(data=True):
+        for node_name, node_data in self.base_pipeline.graph.nodes(data=True):
             component_name, component = node_name, node_data["instance"]
 
             original_run_method = component.run
@@ -71,7 +74,7 @@ class PydanticWrappedPipeline(Pipeline):
         # leading to model parsing errors
         # so to avoid this, we include all components in the output, if `include_outputs_from` is not provided
         if include_outputs_from is None:
-            include_outputs_from = set(self.graph.nodes)  # all components
+            include_outputs_from = set(self.base_pipeline.graph.nodes)  # all components
 
         with ExitStack() as stack:
             # patch back to the original run methods, to avoid side effects
@@ -80,7 +83,9 @@ class PydanticWrappedPipeline(Pipeline):
                 self.patch_back_to_modeled_run_methods,
                 component_name_to_modeled_run_method,
             )
-            output = super().run(data, include_outputs_from=include_outputs_from)
+            output = self.base_pipeline.run(
+                data, include_outputs_from=include_outputs_from
+            )
 
         # dict => pydantic model
         return {
