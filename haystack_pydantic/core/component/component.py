@@ -6,7 +6,7 @@ import inspect
 import importlib
 from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Protocol, cast
+from typing import Any, Mapping, Protocol, cast
 
 from haystack import logging
 from haystack.core.errors import ComponentError
@@ -50,7 +50,7 @@ class HaystackPydanticComponentMeta(ComponentMeta):
             # we priortize the pydantic output type specified in the run method signature
             # if it's not available, we fallback to the output_types decorator
             output_type = inspect.signature(run_func).return_annotation
-            output_sockets: dict[str, OutputSocket]
+            output_sockets: Mapping[str, InputSocket | OutputSocket]
             if issubclass(output_type, BaseModel):
                 # set with the return type of the run method
                 output_sockets = {
@@ -74,14 +74,16 @@ class HaystackPydanticComponentMeta(ComponentMeta):
                     )
                 output_types_cache = run_output_types
 
-                output_sockets = cast(dict[str, OutputSocket], deepcopy(output_types_cache))
+                output_sockets = cast(
+                    dict[str, OutputSocket], deepcopy(output_types_cache)
+                )
             else:
                 raise ComponentError(
                     f"Output type must extend pydantic BaseModel if specified as return type signature, but got {output_type}"
                 )
 
             instance.__haystack_output__ = Sockets(
-                instance, output_sockets, OutputSocket
+                instance, cast(dict[str, InputSocket | OutputSocket], output_sockets), OutputSocket
             )
 
 
