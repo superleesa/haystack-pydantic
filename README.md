@@ -2,6 +2,10 @@
 
 A thin wrapper around haystack Component and Pipeline for typing (outputs) with Pydantic models
 
+```shell
+pip install haystack-pydantic
+```
+
 ```python
 from haystack_pydantic import Pipeline
 from haystack_pydantic import component
