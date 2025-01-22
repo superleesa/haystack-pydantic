@@ -33,6 +33,10 @@ jobs:
       - name: Run lint checks
         run: |
           poetry run ruff check .
+        
+      - name: Run formatting checks
+        run: |
+          poetry run ruff format --check .
 
       - name: Run tests
         run: |
