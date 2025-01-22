@@ -11,7 +11,7 @@ from typing import Any, Mapping, Protocol, cast
 from haystack import logging
 from haystack.core.errors import ComponentError
 from haystack.core.component.sockets import Sockets
-from haystack.core.component.types import OutputSocket
+from haystack.core.component.types import OutputSocket, InputSocket
 from haystack.core.component.component import ComponentMeta
 
 from pydantic import BaseModel
@@ -19,10 +19,10 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-class LenientComponent(Protocol):
-    """Same as haystack.core.component.Component, but without the output type specification"""
-    def run(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+class PydanticComponent(Protocol):
+    """Same as haystack.core.component.Component, but with run method (possibly) returning a Pydantic model"""
+
+    def run(self, *args: Any, **kwargs: Any) -> BaseModel | dict[str, Any]: ...
 
 
 class HaystackPydanticComponentMeta(ComponentMeta):
