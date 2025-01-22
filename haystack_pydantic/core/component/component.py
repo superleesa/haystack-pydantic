@@ -83,7 +83,9 @@ class HaystackPydanticComponentMeta(ComponentMeta):
                 )
 
             instance.__haystack_output__ = Sockets(
-                instance, cast(dict[str, InputSocket | OutputSocket], output_sockets), OutputSocket
+                instance,
+                cast(dict[str, InputSocket | OutputSocket], output_sockets),
+                OutputSocket,
             )
 
 
